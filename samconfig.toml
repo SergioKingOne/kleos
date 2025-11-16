@@ -1,0 +1,91 @@
+version = 0.1
+
+# ========================================
+# Default Configuration
+# ========================================
+[default]
+[default.global.parameters]
+stack_name = "kleos"
+
+[default.build.parameters]
+cached = true
+parallel = true
+beta_features = true  # Required for Rust support
+
+[default.validate.parameters]
+lint = true
+
+[default.deploy.parameters]
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = true
+resolve_s3 = true
+s3_prefix = "kleos"
+region = "us-east-1"
+image_repositories = []
+
+[default.sync.parameters]
+watch = true
+
+# ========================================
+# Development Environment
+# ========================================
+[dev]
+[dev.global.parameters]
+stack_name = "kleos-dev"
+
+[dev.build.parameters]
+cached = true
+parallel = true
+beta_features = true
+
+[dev.deploy.parameters]
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = false  # Auto-confirm for dev
+resolve_s3 = true
+s3_prefix = "kleos-dev"
+region = "us-east-1"
+parameter_overrides = "Environment=dev LogLevel=DEBUG KinesisShardCount=1"
+tags = "Environment=dev Application=Kleos"
+
+# ========================================
+# Staging Environment
+# ========================================
+[staging]
+[staging.global.parameters]
+stack_name = "kleos-staging"
+
+[staging.build.parameters]
+cached = true
+parallel = true
+beta_features = true
+
+[staging.deploy.parameters]
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = true
+resolve_s3 = true
+s3_prefix = "kleos-staging"
+region = "us-east-1"
+parameter_overrides = "Environment=staging LogLevel=INFO KinesisShardCount=2"
+tags = "Environment=staging Application=Kleos"
+
+# ========================================
+# Production Environment
+# ========================================
+[prod]
+[prod.global.parameters]
+stack_name = "kleos-prod"
+
+[prod.build.parameters]
+cached = true
+parallel = true
+beta_features = true
+
+[prod.deploy.parameters]
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = true  # Always confirm for production
+resolve_s3 = true
+s3_prefix = "kleos-prod"
+region = "us-east-1"
+parameter_overrides = "Environment=prod LogLevel=WARN KinesisShardCount=5"
+tags = "Environment=prod Application=Kleos"
+fail_on_empty_changeset = false

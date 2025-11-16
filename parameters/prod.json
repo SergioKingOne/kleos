@@ -1,0 +1,7 @@
+{
+  "Parameters": {
+    "Environment": "prod",
+    "LogLevel": "WARN",
+    "KinesisShardCount": 5
+  }
+}

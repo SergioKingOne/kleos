@@ -1,0 +1,7 @@
+{
+  "Parameters": {
+    "Environment": "staging",
+    "LogLevel": "INFO",
+    "KinesisShardCount": 2
+  }
+}

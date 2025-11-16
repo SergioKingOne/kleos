@@ -1,0 +1,35 @@
+# Rust build artifacts
+/target
+**/target
+
+# Cargo.lock (for libraries, commit for binaries)
+# Cargo.lock
+
+# Debug symbols
+**/*.pdb
+
+# Lambda deployment artifacts
+**/bootstrap
+*.zip
+lambda-*.zip
+deployment/
+
+# AWS SAM/CDK
+.aws-sam/
+cdk.out/
+.cdk.staging/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment files
+.env
+.env.local
