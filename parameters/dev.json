@@ -1,7 +1,0 @@
-{
-  "Parameters": {
-    "Environment": "dev",
-    "LogLevel": "DEBUG",
-    "KinesisShardCount": 1
-  }
-}
