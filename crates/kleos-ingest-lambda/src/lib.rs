@@ -1,8 +1,14 @@
+use aws_lambda_events::event::apigw::ApiGatewayProxyRequest;
 use derive_more::{Display, From};
 use kleos_lib::{Event, Payload};
 use serde::{Deserialize, Serialize};
+use std::convert::TryFrom;
 use thiserror::Error;
 use uuid::Uuid;
+
+// --- Modules ---
+
+pub mod config;
 
 // --- Errors ---
 
@@ -12,6 +18,8 @@ pub enum DomainError {
     InvalidAmount(f64),
     #[error("Invalid page URL: {0}")]
     InvalidPageUrl(String),
+    #[error("Missing request body")]
+    MissingBody,
     #[error("Serialization error: {0}")]
     SerializationError(#[from] serde_json::Error),
 }
@@ -135,5 +143,20 @@ impl UserAction {
 
     pub fn into_event(self) -> Event<UserAction> {
         Event::new(Payload::new(self))
+    }
+}
+
+/// Extract and validate UserAction from API Gateway request body.
+///
+/// This provides clean, type-safe extraction of domain events from HTTP requests.
+impl TryFrom<ApiGatewayProxyRequest> for UserAction {
+    type Error = DomainError;
+
+    fn try_from(request: ApiGatewayProxyRequest) -> Result<Self, Self::Error> {
+        // Extract body from request
+        let body = request.body.ok_or(DomainError::MissingBody)?;
+
+        // Parse and validate
+        UserAction::try_from_json(&body)
     }
 }

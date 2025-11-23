@@ -1,92 +1,88 @@
+use aws_lambda_events::event::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
 use aws_sdk_kinesis::Client as KinesisClient;
 use aws_sdk_kinesis::primitives::Blob;
+use kleos_ingest_lambda::config::Config;
 use kleos_ingest_lambda::UserAction;
 use lambda_runtime::{Error, LambdaEvent, service_fn};
-use serde::Serialize;
-use serde_json::Value;
-
-#[derive(Serialize)]
-struct ApiGatewayResponse {
-    status_code: u16,
-    body: String,
-}
+use std::convert::TryFrom;
 
 #[derive(Clone)]
 struct IngestHandler {
+    config: Config,
     client: KinesisClient,
-    stream_name: String,
 }
 
 impl IngestHandler {
-    fn new(client: KinesisClient) -> Self {
-        let stream_name =
-            std::env::var("KINESIS_STREAM_NAME").unwrap_or_else(|_| "kleos-stream".to_string());
-        Self {
-            client,
-            stream_name,
-        }
+    fn new(config: Config, client: KinesisClient) -> Self {
+        Self { config, client }
     }
 
-    async fn handle(&self, event: LambdaEvent<Value>) -> Result<Value, Error> {
-        // 1. Extract Body
-        let body = if let Some(body) = event.payload.get("body") {
-            body.as_str().unwrap_or("{}")
-        } else {
-            &event.payload.to_string()
-        };
-
-        // 2. Parse & Validate (Type Driven)
-        let user_action = match UserAction::try_from_json(body) {
+    async fn handle(
+        &self,
+        event: LambdaEvent<ApiGatewayProxyRequest>,
+    ) -> Result<ApiGatewayProxyResponse, Error> {
+        // 1. Extract & Validate (Type Driven with TryFrom)
+        let user_action = match UserAction::try_from(event.payload) {
             Ok(action) => action,
             Err(e) => {
-                return Ok(serde_json::to_value(ApiGatewayResponse {
+                return Ok(ApiGatewayProxyResponse {
                     status_code: 400,
-                    body: format!("Invalid request: {}", e),
-                })?);
+                    body: Some(format!("Invalid request: {}", e).into()),
+                    ..Default::default()
+                });
             }
         };
 
-        // 3. Wrap in System Event
+        // 2. Wrap in System Event
         let event = user_action.into_event();
 
-        // 4. Publish
+        // 3. Publish to Kinesis
         let data = match serde_json::to_vec(&event) {
             Ok(d) => d,
             Err(e) => {
-                return Ok(serde_json::to_value(ApiGatewayResponse {
+                return Ok(ApiGatewayProxyResponse {
                     status_code: 500,
-                    body: format!("Serialization error: {}", e),
-                })?);
+                    body: Some(format!("Serialization error: {}", e).into()),
+                    ..Default::default()
+                });
             }
         };
 
         match self
             .client
             .put_record()
-            .stream_name(&self.stream_name)
+            .stream_name(&self.config.stream_name)
             .data(Blob::new(data))
             .partition_key(event.id.to_string())
             .send()
             .await
         {
-            Ok(_) => Ok(serde_json::to_value(ApiGatewayResponse {
+            Ok(_) => Ok(ApiGatewayProxyResponse {
                 status_code: 200,
-                body: "Event ingested successfully".to_string(),
-            })?),
-            Err(e) => Ok(serde_json::to_value(ApiGatewayResponse {
+                body: Some("Event ingested successfully".to_string().into()),
+                ..Default::default()
+            }),
+            Err(e) => Ok(ApiGatewayProxyResponse {
                 status_code: 500,
-                body: format!("Failed to ingest event: {}", e),
-            })?),
+                body: Some(format!("Failed to ingest event: {}", e).into()),
+                ..Default::default()
+            }),
         }
     }
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    let config = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
-    let kinesis_client = KinesisClient::new(&config);
+    // Load configuration at initialization - fail fast if config is invalid
+    let config = Config::from_env()
+        .map_err(|e| format!("Failed to load configuration: {}", e))?;
 
-    let handler = IngestHandler::new(kinesis_client);
+    // Initialize AWS SDK clients
+    let aws_config = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
+    let kinesis_client = KinesisClient::new(&aws_config);
+
+    // Create handler with config and clients
+    let handler = IngestHandler::new(config, kinesis_client);
 
     let func = service_fn(move |event| {
         let h = handler.clone();
