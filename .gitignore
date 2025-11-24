@@ -16,6 +16,9 @@ deployment/
 
 # AWS SAM/CDK
 .aws-sam/
+infra/.aws-sam/
+infra/packaged.yaml
+samconfig.toml.local
 cdk.out/
 .cdk.staging/
 

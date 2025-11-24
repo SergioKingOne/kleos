@@ -1,0 +1,96 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Kleos Process Function - Kinesis event processing Lambda
+
+Parameters:
+  Environment:
+    Type: String
+    Description: Environment name (dev, staging, prod)
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+    Default: dev
+
+  KinesisStreamArn:
+    Type: String
+    Description: Kinesis stream ARN (from streams stack)
+
+  DeadLetterQueueArn:
+    Type: String
+    Description: Dead Letter Queue ARN (from streams stack)
+
+Globals:
+  Function:
+    Runtime: provided.al2023
+    Architectures:
+      - arm64
+    MemorySize: 128
+    Timeout: 60
+    Environment:
+      Variables:
+        RUST_LOG: info
+        ENVIRONMENT: !Ref Environment
+
+Resources:
+  # Process Lambda Function
+  ProcessFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: rust-cargolambda
+      BuildProperties:
+        Binary: kleos-process-lambda
+    Properties:
+      FunctionName: !Sub kleos-process-${Environment}
+      CodeUri: ../../../crates/kleos-process-lambda/
+      Handler: bootstrap
+      Description: Processes user action events from Kinesis stream
+      ReservedConcurrentExecutions: 10
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - kinesis:GetRecords
+                - kinesis:GetShardIterator
+                - kinesis:DescribeStream
+                - kinesis:ListShards
+                - kinesis:ListStreams
+              Resource: !Ref KinesisStreamArn
+            - Effect: Allow
+              Action:
+                - sqs:SendMessage
+              Resource: !Ref DeadLetterQueueArn
+        - CloudWatchPutMetricPolicy: {}
+      Events:
+        KinesisStream:
+          Type: Kinesis
+          Properties:
+            Stream: !Ref KinesisStreamArn
+            StartingPosition: LATEST
+            BatchSize: 100
+            MaximumBatchingWindowInSeconds: 5
+            ParallelizationFactor: 1
+            MaximumRecordAgeInSeconds: 604800  # 7 days
+            BisectBatchOnFunctionError: true
+            MaximumRetryAttempts: 3
+            DestinationConfig:
+              OnFailure:
+                Type: SQS
+                Destination: !Ref DeadLetterQueueArn
+      Tags:
+        Environment: !Ref Environment
+        Project: Kleos
+        ManagedBy: SAM
+
+Outputs:
+  ProcessFunctionArn:
+    Description: ARN of the process Lambda function
+    Value: !GetAtt ProcessFunction.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-FunctionArn
+
+  ProcessFunctionName:
+    Description: Name of the process Lambda function
+    Value: !Ref ProcessFunction
+    Export:
+      Name: !Sub ${AWS::StackName}-FunctionName

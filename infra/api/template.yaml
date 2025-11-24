@@ -1,0 +1,73 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Kleos API Layer - API Gateway REST API
+
+Parameters:
+  Environment:
+    Type: String
+    Description: Environment name (dev, staging, prod)
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+    Default: dev
+
+Resources:
+  # API Gateway REST API
+  KleosApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub kleos-api-${Environment}
+      StageName: !Ref Environment
+      Description: Kleos event ingestion API
+      Cors:
+        AllowMethods: "'POST, OPTIONS'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+        AllowOrigin: "'*'"  # TODO: Restrict in production
+        MaxAge: "'600'"
+      TracingEnabled: true
+      MethodSettings:
+        - ResourcePath: "/*"
+          HttpMethod: "*"
+          LoggingLevel: INFO
+          DataTraceEnabled: true
+          MetricsEnabled: true
+      AccessLogSetting:
+        DestinationArn: !GetAtt ApiAccessLogGroup.Arn
+        Format: '$context.requestId $context.extendedRequestId $context.identity.sourceIp $context.requestTime $context.httpMethod $context.routeKey $context.status $context.protocol $context.responseLength'
+      Tags:
+        Environment: !Ref Environment
+        Project: Kleos
+        ManagedBy: SAM
+
+  # CloudWatch Log Group for API Gateway access logs
+  ApiAccessLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/apigateway/kleos-api-${Environment}
+      RetentionInDays: 7
+
+Outputs:
+  ApiId:
+    Description: API Gateway REST API ID
+    Value: !Ref KleosApi
+    Export:
+      Name: !Sub ${AWS::StackName}-ApiId
+
+  ApiRootResourceId:
+    Description: API Gateway root resource ID
+    Value: !GetAtt KleosApi.RootResourceId
+    Export:
+      Name: !Sub ${AWS::StackName}-RootResourceId
+
+  ApiUrl:
+    Description: API Gateway endpoint URL
+    Value: !Sub https://${KleosApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}
+    Export:
+      Name: !Sub ${AWS::StackName}-ApiUrl
+
+  ApiStage:
+    Description: API Gateway stage name
+    Value: !Ref Environment
+    Export:
+      Name: !Sub ${AWS::StackName}-StageName

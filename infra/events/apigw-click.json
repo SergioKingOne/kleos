@@ -1,0 +1,48 @@
+{
+  "resource": "/ingest",
+  "path": "/ingest",
+  "httpMethod": "POST",
+  "headers": {
+    "Accept": "application/json",
+    "Content-Type": "application/json",
+    "Host": "api.kleos.local",
+    "User-Agent": "curl/7.64.1"
+  },
+  "multiValueHeaders": {
+    "Accept": ["application/json"],
+    "Content-Type": ["application/json"]
+  },
+  "queryStringParameters": null,
+  "multiValueQueryStringParameters": null,
+  "pathParameters": null,
+  "stageVariables": null,
+  "requestContext": {
+    "accountId": "123456789012",
+    "apiId": "1234567890",
+    "protocol": "HTTP/1.1",
+    "httpMethod": "POST",
+    "path": "/dev/ingest",
+    "stage": "dev",
+    "requestId": "c6af9ac6-7b61-11e6-9a41-93e8deadbeef",
+    "requestTime": "09/Apr/2024:12:34:56 +0000",
+    "requestTimeEpoch": 1428582896000,
+    "identity": {
+      "cognitoIdentityPoolId": null,
+      "accountId": null,
+      "cognitoIdentityId": null,
+      "caller": null,
+      "sourceIp": "127.0.0.1",
+      "principalOrgId": null,
+      "accessKey": null,
+      "cognitoAuthenticationType": null,
+      "cognitoAuthenticationProvider": null,
+      "userArn": null,
+      "userAgent": "curl/7.64.1",
+      "user": null
+    },
+    "domainName": "api.kleos.local",
+    "apiId": "1234567890"
+  },
+  "body": "{\"type\":\"Click\",\"data\":{\"user_id\":\"550e8400-e29b-41d4-a716-446655440000\",\"element_id\":\"add-to-cart-btn\",\"url\":\"/products/laptop\"}}",
+  "isBase64Encoded": false
+}

@@ -1,0 +1,122 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Kleos Event-Driven Data Pipeline - Root Stack
+
+Parameters:
+  Environment:
+    Type: String
+    Description: Environment name (dev, staging, prod)
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+    Default: dev
+
+  KinesisShardCount:
+    Type: Number
+    Description: Number of Kinesis shards for the stream
+    Default: 1
+    MinValue: 1
+    MaxValue: 100
+
+Resources:
+  # Streaming Infrastructure Stack (Kinesis + DLQ)
+  StreamsStack:
+    Type: AWS::Serverless::Application
+    Properties:
+      Location: streams/template.yaml
+      Parameters:
+        Environment: !Ref Environment
+        KinesisShardCount: !Ref KinesisShardCount
+      Tags:
+        Environment: !Ref Environment
+        Project: Kleos
+        ManagedBy: SAM
+
+  # API Gateway Stack
+  ApiStack:
+    Type: AWS::Serverless::Application
+    Properties:
+      Location: api/template.yaml
+      Parameters:
+        Environment: !Ref Environment
+      Tags:
+        Environment: !Ref Environment
+        Project: Kleos
+        ManagedBy: SAM
+
+  # Ingest Lambda Function Stack
+  IngestFunctionStack:
+    Type: AWS::Serverless::Application
+    Properties:
+      Location: functions/ingest/template.yaml
+      Parameters:
+        Environment: !Ref Environment
+        ApiId: !GetAtt ApiStack.Outputs.ApiId
+        ApiRootResourceId: !GetAtt ApiStack.Outputs.ApiRootResourceId
+        KinesisStreamName: !GetAtt StreamsStack.Outputs.KinesisStreamName
+      Tags:
+        Environment: !Ref Environment
+        Project: Kleos
+        ManagedBy: SAM
+
+  # Process Lambda Function Stack
+  ProcessFunctionStack:
+    Type: AWS::Serverless::Application
+    Properties:
+      Location: functions/process/template.yaml
+      Parameters:
+        Environment: !Ref Environment
+        KinesisStreamArn: !GetAtt StreamsStack.Outputs.KinesisStreamArn
+        DeadLetterQueueArn: !GetAtt StreamsStack.Outputs.DeadLetterQueueArn
+      Tags:
+        Environment: !Ref Environment
+        Project: Kleos
+        ManagedBy: SAM
+
+  # Observability Stack (CloudWatch Logs + Alarms)
+  ObservabilityStack:
+    Type: AWS::Serverless::Application
+    Properties:
+      Location: observability/template.yaml
+      Parameters:
+        Environment: !Ref Environment
+        IngestFunctionName: !GetAtt IngestFunctionStack.Outputs.IngestFunctionName
+        ProcessFunctionName: !GetAtt ProcessFunctionStack.Outputs.ProcessFunctionName
+      Tags:
+        Environment: !Ref Environment
+        Project: Kleos
+        ManagedBy: SAM
+
+Outputs:
+  ApiEndpoint:
+    Description: API Gateway endpoint URL for event ingestion
+    Value: !Sub ${ApiStack.Outputs.ApiUrl}/ingest
+    Export:
+      Name: !Sub ${AWS::StackName}-ApiEndpoint
+
+  KinesisStreamName:
+    Description: Name of the Kinesis stream
+    Value: !GetAtt StreamsStack.Outputs.KinesisStreamName
+    Export:
+      Name: !Sub ${AWS::StackName}-StreamName
+
+  KinesisStreamArn:
+    Description: ARN of the Kinesis stream
+    Value: !GetAtt StreamsStack.Outputs.KinesisStreamArn
+    Export:
+      Name: !Sub ${AWS::StackName}-StreamArn
+
+  DeadLetterQueueUrl:
+    Description: URL of the Dead Letter Queue
+    Value: !GetAtt StreamsStack.Outputs.DeadLetterQueueUrl
+    Export:
+      Name: !Sub ${AWS::StackName}-DlqUrl
+
+  IngestFunctionName:
+    Description: Name of the ingest Lambda function
+    Value: !GetAtt IngestFunctionStack.Outputs.IngestFunctionName
+
+  ProcessFunctionName:
+    Description: Name of the process Lambda function
+    Value: !GetAtt ProcessFunctionStack.Outputs.ProcessFunctionName

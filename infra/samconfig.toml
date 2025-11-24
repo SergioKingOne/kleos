@@ -1,0 +1,48 @@
+version = 0.1
+
+[default]
+[default.global.parameters]
+stack_name = "kleos-pipeline"
+
+[default.build.parameters]
+cached = true
+parallel = true
+beta_features = true
+
+[default.validate.parameters]
+lint = true
+
+[default.deploy.parameters]
+capabilities = "CAPABILITY_IAM CAPABILITY_AUTO_EXPAND"
+confirm_changeset = true
+resolve_s3 = true
+s3_prefix = "kleos"
+region = "us-east-1"
+disable_rollback = false
+on_failure = "ROLLBACK"
+
+[default.sync.parameters]
+watch = true
+
+[dev]
+[dev.deploy.parameters]
+stack_name = "kleos-pipeline-dev"
+parameter_overrides = "Environment=dev KinesisShardCount=1"
+fail_on_empty_changeset = false
+
+[dev.sync.parameters]
+stack_name = "kleos-pipeline-dev"
+
+[staging]
+[staging.deploy.parameters]
+stack_name = "kleos-pipeline-staging"
+parameter_overrides = "Environment=staging KinesisShardCount=2"
+confirm_changeset = true
+fail_on_empty_changeset = false
+
+[prod]
+[prod.deploy.parameters]
+stack_name = "kleos-pipeline-prod"
+parameter_overrides = "Environment=prod KinesisShardCount=4"
+confirm_changeset = true
+fail_on_empty_changeset = true

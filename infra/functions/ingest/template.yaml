@@ -1,0 +1,109 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Kleos Ingest Function - API Gateway event ingestion Lambda
+
+Parameters:
+  Environment:
+    Type: String
+    Description: Environment name (dev, staging, prod)
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+    Default: dev
+
+  ApiId:
+    Type: String
+    Description: API Gateway REST API ID (from API stack)
+
+  ApiRootResourceId:
+    Type: String
+    Description: API Gateway root resource ID (from API stack)
+
+  KinesisStreamName:
+    Type: String
+    Description: Kinesis stream name (from streams stack)
+
+Globals:
+  Function:
+    Runtime: provided.al2023
+    Architectures:
+      - arm64
+    MemorySize: 128
+    Timeout: 30
+    Environment:
+      Variables:
+        RUST_LOG: info
+        ENVIRONMENT: !Ref Environment
+
+Resources:
+  # Ingest Lambda Function
+  IngestFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: rust-cargolambda
+      BuildProperties:
+        Binary: kleos-ingest-lambda
+    Properties:
+      FunctionName: !Sub kleos-ingest-${Environment}
+      CodeUri: ../../../crates/kleos-ingest-lambda/
+      Handler: bootstrap
+      Description: Ingests user actions via API Gateway and publishes to Kinesis
+      Environment:
+        Variables:
+          KINESIS_STREAM_NAME: !Ref KinesisStreamName
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - kinesis:PutRecord
+                - kinesis:PutRecords
+              Resource: !Sub arn:aws:kinesis:${AWS::Region}:${AWS::AccountId}:stream/${KinesisStreamName}
+        - CloudWatchPutMetricPolicy: {}
+      Tags:
+        Environment: !Ref Environment
+        Project: Kleos
+        ManagedBy: SAM
+
+  # API Gateway Resource for /ingest
+  IngestResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiId
+      ParentId: !Ref ApiRootResourceId
+      PathPart: ingest
+
+  # API Gateway Method POST /ingest
+  IngestMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiId
+      ResourceId: !Ref IngestResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${IngestFunction.Arn}/invocations
+
+  # Lambda Permission for API Gateway
+  IngestLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref IngestFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiId}/*/*/ingest
+
+Outputs:
+  IngestFunctionArn:
+    Description: ARN of the ingest Lambda function
+    Value: !GetAtt IngestFunction.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-FunctionArn
+
+  IngestFunctionName:
+    Description: Name of the ingest Lambda function
+    Value: !Ref IngestFunction
+    Export:
+      Name: !Sub ${AWS::StackName}-FunctionName

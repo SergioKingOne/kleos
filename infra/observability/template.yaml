@@ -1,0 +1,171 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Kleos Observability - CloudWatch Logs and Alarms
+
+Parameters:
+  Environment:
+    Type: String
+    Description: Environment name (dev, staging, prod)
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+    Default: dev
+
+  IngestFunctionName:
+    Type: String
+    Description: Name of the ingest Lambda function (from ingest function stack)
+
+  ProcessFunctionName:
+    Type: String
+    Description: Name of the process Lambda function (from process function stack)
+
+Resources:
+  # CloudWatch Log Group for Ingest Function
+  IngestLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${IngestFunctionName}
+      RetentionInDays: 7
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: Kleos
+        - Key: ManagedBy
+          Value: SAM
+
+  # CloudWatch Log Group for Process Function
+  ProcessLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${ProcessFunctionName}
+      RetentionInDays: 7
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: Kleos
+        - Key: ManagedBy
+          Value: SAM
+
+  # CloudWatch Alarm for Ingest Function Errors
+  IngestErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub kleos-ingest-errors-${Environment}
+      AlarmDescription: Alert when ingest function has high error rate
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref IngestFunctionName
+      TreatMissingData: notBreaching
+
+  # CloudWatch Alarm for Process Function Errors
+  ProcessErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub kleos-process-errors-${Environment}
+      AlarmDescription: Alert when process function has high error rate
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 10
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ProcessFunctionName
+      TreatMissingData: notBreaching
+
+  # CloudWatch Alarm for Ingest Function Duration
+  IngestDurationAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub kleos-ingest-duration-${Environment}
+      AlarmDescription: Alert when ingest function has high duration
+      MetricName: Duration
+      Namespace: AWS/Lambda
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 25000  # 25 seconds (timeout is 30)
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref IngestFunctionName
+      TreatMissingData: notBreaching
+
+  # CloudWatch Alarm for Process Function Duration
+  ProcessDurationAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub kleos-process-duration-${Environment}
+      AlarmDescription: Alert when process function has high duration
+      MetricName: Duration
+      Namespace: AWS/Lambda
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 50000  # 50 seconds (timeout is 60)
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ProcessFunctionName
+      TreatMissingData: notBreaching
+
+  # CloudWatch Alarm for Ingest Function Throttles
+  IngestThrottleAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub kleos-ingest-throttles-${Environment}
+      AlarmDescription: Alert when ingest function is being throttled
+      MetricName: Throttles
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref IngestFunctionName
+      TreatMissingData: notBreaching
+
+  # CloudWatch Alarm for Process Function Throttles
+  ProcessThrottleAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub kleos-process-throttles-${Environment}
+      AlarmDescription: Alert when process function is being throttled
+      MetricName: Throttles
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ProcessFunctionName
+      TreatMissingData: notBreaching
+
+Outputs:
+  IngestLogGroupName:
+    Description: Name of the ingest function log group
+    Value: !Ref IngestLogGroup
+    Export:
+      Name: !Sub ${AWS::StackName}-IngestLogGroup
+
+  ProcessLogGroupName:
+    Description: Name of the process function log group
+    Value: !Ref ProcessLogGroup
+    Export:
+      Name: !Sub ${AWS::StackName}-ProcessLogGroup

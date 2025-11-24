@@ -1,0 +1,82 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Kleos Streaming Infrastructure - Kinesis Stream and Dead Letter Queue
+
+Parameters:
+  Environment:
+    Type: String
+    Description: Environment name (dev, staging, prod)
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+    Default: dev
+
+  KinesisShardCount:
+    Type: Number
+    Description: Number of Kinesis shards for the stream
+    Default: 1
+    MinValue: 1
+    MaxValue: 100
+
+Resources:
+  # Kinesis Data Stream for event streaming
+  KleosStream:
+    Type: AWS::Kinesis::Stream
+    Properties:
+      Name: !Sub kleos-stream-${Environment}
+      ShardCount: !Ref KinesisShardCount
+      RetentionPeriodHours: 24
+      StreamEncryption:
+        EncryptionType: KMS
+        KeyId: alias/aws/kinesis
+      StreamModeDetails:
+        StreamMode: PROVISIONED
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: Kleos
+        - Key: ManagedBy
+          Value: SAM
+
+  # Dead Letter Queue for failed event processing
+  DeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub kleos-dlq-${Environment}
+      MessageRetentionPeriod: 1209600  # 14 days
+      VisibilityTimeout: 300
+      KmsMasterKeyId: alias/aws/sqs
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: Kleos
+        - Key: ManagedBy
+          Value: SAM
+
+Outputs:
+  KinesisStreamArn:
+    Description: ARN of the Kinesis stream
+    Value: !GetAtt KleosStream.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-StreamArn
+
+  KinesisStreamName:
+    Description: Name of the Kinesis stream
+    Value: !Ref KleosStream
+    Export:
+      Name: !Sub ${AWS::StackName}-StreamName
+
+  DeadLetterQueueArn:
+    Description: ARN of the Dead Letter Queue
+    Value: !GetAtt DeadLetterQueue.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-DlqArn
+
+  DeadLetterQueueUrl:
+    Description: URL of the Dead Letter Queue
+    Value: !Ref DeadLetterQueue
+    Export:
+      Name: !Sub ${AWS::StackName}-DlqUrl
