@@ -77,17 +77,62 @@ if ! sam validate --lint; then
 fi
 echo -e "${GREEN}✓ Templates validated${RESET}"
 
-# Build with SAM
-echo -e "${YELLOW}Building with SAM...${RESET}"
-if ! sam build --beta-features --parallel --cached; then
+# Build Lambda functions with cargo-lambda (more reliable than SAM's builder)
+echo -e "${YELLOW}Building Lambda functions with cargo-lambda...${RESET}"
+cd "$PROJECT_ROOT"
+if ! cargo lambda build --release --arm64 --workspace; then
     echo -e "${RED}✗ Build failed${RESET}"
     exit 1
 fi
 echo -e "${GREEN}✓ Build complete${RESET}"
 
+cd "$INFRA_DIR"
+
+# Package for SAM (manually create build directory with pre-built binaries)
+echo -e "${YELLOW}Packaging for deployment...${RESET}"
+BUILD_DIR="$INFRA_DIR/.aws-sam/build"
+rm -rf "$BUILD_DIR"
+mkdir -p "$BUILD_DIR"
+
+# Copy templates
+cp template.yaml "$BUILD_DIR/"
+cp -r streams "$BUILD_DIR/"
+cp -r api "$BUILD_DIR/"
+cp -r observability "$BUILD_DIR/"
+mkdir -p "$BUILD_DIR/functions/ingest" "$BUILD_DIR/functions/process"
+cp functions/ingest/template.yaml "$BUILD_DIR/functions/ingest/"
+cp functions/process/template.yaml "$BUILD_DIR/functions/process/"
+
+# Copy pre-built Lambda binaries
+mkdir -p "$BUILD_DIR/IngestFunctionStack" "$BUILD_DIR/ProcessFunctionStack"
+cp "$PROJECT_ROOT/target/lambda/kleos-ingest-lambda/bootstrap" "$BUILD_DIR/IngestFunctionStack/"
+cp "$PROJECT_ROOT/target/lambda/kleos-process-lambda/bootstrap" "$BUILD_DIR/ProcessFunctionStack/"
+
+# Update CodeUri in built templates to point to the binary directories
+sed -i '' 's|CodeUri: ../../../crates/kleos-ingest-lambda/|CodeUri: ../../IngestFunctionStack/|g' "$BUILD_DIR/functions/ingest/template.yaml"
+sed -i '' 's|CodeUri: ../../../crates/kleos-process-lambda/|CodeUri: ../../ProcessFunctionStack/|g' "$BUILD_DIR/functions/process/template.yaml"
+
+echo -e "${GREEN}✓ Packaging complete${RESET}"
+
 # Deploy
 echo -e "${YELLOW}Deploying to AWS...${RESET}"
-if sam deploy --config-env "$ENV" --beta-features; then
+AWS_REGION="${AWS_REGION:-us-east-1}"
+STACK_NAME="kleos-pipeline-$ENV"
+
+# Get shard count based on environment
+case $ENV in
+    dev) SHARD_COUNT=1 ;;
+    staging) SHARD_COUNT=2 ;;
+    prod) SHARD_COUNT=4 ;;
+esac
+
+if sam deploy \
+    --template-file "$BUILD_DIR/template.yaml" \
+    --stack-name "$STACK_NAME" \
+    --parameter-overrides "Environment=$ENV KinesisShardCount=$SHARD_COUNT" \
+    --capabilities CAPABILITY_IAM CAPABILITY_AUTO_EXPAND \
+    --region "$AWS_REGION" \
+    --resolve-s3; then
     echo -e "${GREEN}✓ Deployment successful!${RESET}"
 
     # Show stack outputs

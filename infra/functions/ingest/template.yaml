@@ -40,10 +40,6 @@ Resources:
   # Ingest Lambda Function
   IngestFunction:
     Type: AWS::Serverless::Function
-    Metadata:
-      BuildMethod: rust-cargolambda
-      BuildProperties:
-        Binary: kleos-ingest-lambda
     Properties:
       FunctionName: !Sub kleos-ingest-${Environment}
       CodeUri: ../../../crates/kleos-ingest-lambda/

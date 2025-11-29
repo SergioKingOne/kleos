@@ -36,10 +36,6 @@ Resources:
   # Process Lambda Function
   ProcessFunction:
     Type: AWS::Serverless::Function
-    Metadata:
-      BuildMethod: rust-cargolambda
-      BuildProperties:
-        Binary: kleos-process-lambda
     Properties:
       FunctionName: !Sub kleos-process-${Environment}
       CodeUri: ../../../crates/kleos-process-lambda/
