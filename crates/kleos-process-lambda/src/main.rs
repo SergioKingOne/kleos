@@ -1,72 +1,77 @@
 use aws_lambda_events::event::kinesis::KinesisEvent;
 use kleos_ingest_lambda::UserAction;
-use kleos_lib::Event;
-use kleos_process_lambda::ProcessableRecord;
+use kleos_lib::{ProcessingResult, Processor, StreamConsumer};
 use kleos_process_lambda::config::Config;
+use kleos_process_lambda::consumer::KinesisBatchConsumer;
+use kleos_process_lambda::processor::UserActionProcessor;
 use lambda_runtime::{Error, LambdaEvent, service_fn};
 use serde_json::Value;
-use std::convert::TryFrom;
-
-struct ProcessableAction(UserAction);
-
-impl ProcessableAction {
-    pub fn execute(&self) {
-        match &self.0 {
-            UserAction::PageView { user_id, url } => {
-                println!("User {} viewed page {}", user_id, url);
-            }
-            UserAction::Click {
-                user_id,
-                element_id,
-                url,
-            } => {
-                println!("User {} clicked {} on {}", user_id, element_id, url);
-            }
-            UserAction::Purchase {
-                user_id,
-                product_id,
-                amount,
-            } => {
-                println!("User {} purchased {} for {}", user_id, product_id, amount);
-            }
-        }
-    }
-}
 
 #[derive(Clone)]
-struct ProcessHandler {
-    _config: Config,
+struct ProcessHandler<C, P>
+where
+    C: StreamConsumer<UserAction> + Clone,
+    P: Processor<UserAction> + Clone,
+{
+    consumer: C,
+    processor: P,
 }
 
-impl ProcessHandler {
-    fn new(config: Config) -> Self {
-        Self { _config: config }
+impl<C, P> ProcessHandler<C, P>
+where
+    C: StreamConsumer<UserAction> + Clone,
+    P: Processor<UserAction> + Clone,
+{
+    fn new(consumer: C, processor: P) -> Self {
+        Self {
+            consumer,
+            processor,
+        }
     }
-}
 
-impl ProcessHandler {
     async fn handle(&self, event: LambdaEvent<KinesisEvent>) -> Result<Value, Error> {
+        // Extract raw bytes from Kinesis records
+        let records: Vec<&[u8]> = event
+            .payload
+            .records
+            .iter()
+            .map(|r| r.kinesis.data.as_ref())
+            .collect();
+
+        // Load batch into consumer (transitions Created -> Consumed)
+        self.consumer
+            .load(records)
+            .await
+            .map_err(|e| format!("Failed to load batch: {}", e))?;
+
         let mut processed_count = 0;
         let mut failed_count = 0;
 
-        for record in event.payload.records {
-            // Extract record with metadata using TryFrom
-            match ProcessableRecord::<Event<UserAction>>::try_from(record) {
-                Ok(processable) => {
-                    // Execute the action
-                    let action = ProcessableAction(processable.data.payload.data);
-                    action.execute();
-
-                    // Log with metadata for observability
-                    println!(
-                        "Processed record {} from partition {}",
-                        processable.metadata.sequence_number, processable.metadata.partition_key
-                    );
-
+        // Process each event via trait implementations
+        while let Some(consumed_event) = self
+            .consumer
+            .consume()
+            .await
+            .map_err(|e| format!("Consume error: {}", e))?
+        {
+            match self.processor.process(&consumed_event).await {
+                Ok(ProcessingResult::Success) => {
+                    self.consumer
+                        .ack(&consumed_event.id)
+                        .await
+                        .map_err(|e| format!("Ack error: {}", e))?;
+                    processed_count += 1;
+                }
+                Ok(ProcessingResult::Failure(reason)) => {
+                    eprintln!("Processing failed: {}", reason);
+                    failed_count += 1;
+                }
+                Ok(ProcessingResult::Skipped(reason)) => {
+                    println!("Skipped: {}", reason);
                     processed_count += 1;
                 }
                 Err(e) => {
-                    eprintln!("Failed to process record: {}", e);
+                    eprintln!("Processing error: {}", e);
                     failed_count += 1;
                 }
             }
@@ -82,10 +87,14 @@ impl ProcessHandler {
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     // Load configuration at initialization - fail fast if config is invalid
-    let config = Config::from_env().map_err(|e| format!("Failed to load configuration: {}", e))?;
+    let _config = Config::from_env().map_err(|e| format!("Failed to load configuration: {}", e))?;
 
-    // Create handler with config
-    let handler = ProcessHandler::new(config);
+    // Wire adapters implementing kleos-lib traits
+    let consumer = KinesisBatchConsumer::new();
+    let processor = UserActionProcessor;
+
+    // Create handler with trait implementations
+    let handler = ProcessHandler::new(consumer, processor);
 
     let func = service_fn(move |event| {
         let h = handler.clone();

@@ -1,4 +1,4 @@
-use kleos_lib::events::{Event, Created, Payload};
+use kleos_lib::events::{Created, Event, Payload};
 
 #[test]
 fn test_event_creation() {
@@ -29,7 +29,7 @@ fn test_event_transition() {
     // Transition to Consumed (simulating the type change, although we need the target type to be available)
     // Since Consumed is public, we can use it.
     use kleos_lib::events::Consumed;
-    
+
     let consumed_event: Event<String, Consumed> = event.transition();
 
     assert_eq!(consumed_event.id, original_id);

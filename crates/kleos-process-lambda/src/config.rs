@@ -5,7 +5,7 @@ use thiserror::Error;
 /// All configuration is loaded at initialization time from environment variables.
 /// Currently minimal, but structured to allow easy extension as processing
 /// requirements grow (e.g., batch sizes, retry policies, output destinations).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Config {}
 
 /// Errors that can occur during configuration loading
@@ -35,11 +35,5 @@ impl Config {
         // - Processing mode flags
 
         Ok(Self {})
-    }
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {}
     }
 }

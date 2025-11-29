@@ -1,9 +1,9 @@
 use async_trait::async_trait;
 use kleos_lib::{
-    events::{Event, Created, Consumed, EventId, Payload},
-    ingestion::{Ingestor, IngestError},
-    stream::{StreamPublisher, StreamConsumer, StreamError},
-    processing::{Processor, ProcessingError, ProcessingResult},
+    events::{Consumed, Created, Event, EventId, Payload},
+    ingestion::{IngestError, Ingestor},
+    processing::{ProcessingError, ProcessingResult, Processor},
+    stream::{StreamConsumer, StreamError, StreamPublisher},
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -64,7 +64,9 @@ impl Clone for InMemoryStream {
 impl StreamPublisher<User> for InMemoryStream {
     async fn publish(&self, event: &Event<User, Created>) -> Result<(), StreamError> {
         println!("[Stream] Publishing event: {}", event.id);
-        self.sender.send(event.clone()).await
+        self.sender
+            .send(event.clone())
+            .await
             .map_err(|e| StreamError::PublishError(e.to_string()))?;
         Ok(())
     }
@@ -72,12 +74,16 @@ impl StreamPublisher<User> for InMemoryStream {
 
 #[async_trait]
 impl StreamConsumer<User> for InMemoryStream {
+    async fn load(&self, _records: Vec<&[u8]>) -> Result<(), StreamError> {
+        // Not used in this example - events come through the channel
+        Ok(())
+    }
+
     async fn consume(&self) -> Result<Option<Event<User, Consumed>>, StreamError> {
         let mut rx = self.receiver.lock().await;
         match rx.recv().await {
             Some(event) => {
                 println!("[Stream] Consumed event: {}", event.id);
-                // Transition state from Created to Consumed
                 Ok(Some(event.transition()))
             }
             None => Ok(None),
@@ -95,13 +101,19 @@ struct UserProcessor;
 
 #[async_trait]
 impl Processor<User> for UserProcessor {
-    async fn process(&self, event: &Event<User, Consumed>) -> Result<ProcessingResult, ProcessingError> {
+    async fn process(
+        &self,
+        event: &Event<User, Consumed>,
+    ) -> Result<ProcessingResult, ProcessingError> {
         let user = &event.payload.data;
-        println!("[Processor] Processing user: {} ({})", user.name, user.email);
-        
+        println!(
+            "[Processor] Processing user: {} ({})",
+            user.name, user.email
+        );
+
         // Simulate some work
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-        
+
         println!("[Processor] User saved to DB (simulated)");
         Ok(ProcessingResult::Success)
     }
@@ -118,17 +130,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Simulate Data
     let users = vec![
-        User { id: "1".into(), name: "Alice".into(), email: "alice@example.com".into() },
-        User { id: "2".into(), name: "Bob".into(), email: "bob@example.com".into() },
+        User {
+            id: "1".into(),
+            name: "Alice".into(),
+            email: "alice@example.com".into(),
+        },
+        User {
+            id: "2".into(),
+            name: "Bob".into(),
+            email: "bob@example.com".into(),
+        },
     ];
 
     // Run Flow
     for user in users {
         println!("\nProcessing flow for: {}", user.name);
-        
+
         // 1. Ingest
         let event = ingestor.ingest(user).await?;
-        
+
         // 2. Publish
         publisher.publish(&event).await?;
 

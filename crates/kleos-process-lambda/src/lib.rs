@@ -6,6 +6,8 @@ use thiserror::Error;
 // --- Modules ---
 
 pub mod config;
+pub mod consumer;
+pub mod processor;
 
 // --- Errors ---
 
@@ -50,17 +52,17 @@ impl<T: DeserializeOwned> TryFrom<KinesisEventRecord> for ProcessableRecord<T> {
         // Deserialize data (Base64Data automatically derefs to &[u8])
         let data = serde_json::from_slice(&record.kinesis.data)?;
 
-        // Extract metadata with sensible defaults
+        // Extract metadata
         let metadata = RecordMetadata {
-            sequence_number: record
-                .kinesis
-                .sequence_number
-                .unwrap_or_else(|| "unknown".to_string()),
-            partition_key: record
-                .kinesis
-                .partition_key
-                .unwrap_or_else(|| "unknown".to_string()),
-            approximate_arrival_timestamp: Some(record.kinesis.approximate_arrival_timestamp.0.timestamp_millis()),
+            sequence_number: record.kinesis.sequence_number,
+            partition_key: record.kinesis.partition_key,
+            approximate_arrival_timestamp: Some(
+                record
+                    .kinesis
+                    .approximate_arrival_timestamp
+                    .0
+                    .timestamp_millis(),
+            ),
         };
 
         Ok(ProcessableRecord { data, metadata })

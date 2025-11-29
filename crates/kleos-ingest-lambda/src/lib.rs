@@ -9,6 +9,8 @@ use uuid::Uuid;
 // --- Modules ---
 
 pub mod config;
+pub mod ingestor;
+pub mod publisher;
 
 // --- Errors ---
 
@@ -47,6 +49,12 @@ pub struct ProductId(Uuid);
 impl ProductId {
     pub fn new() -> Self {
         Self(Uuid::new_v4())
+    }
+}
+
+impl Default for ProductId {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

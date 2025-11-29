@@ -1,5 +1,5 @@
+use crate::events::{Created, Event};
 use async_trait::async_trait;
-use crate::events::{Event, Created};
 use thiserror::Error;
 
 #[derive(Error, Debug)]

@@ -1,5 +1,5 @@
+use crate::events::{Consumed, Created, Event, EventId};
 use async_trait::async_trait;
-use crate::events::{Event, Created, Consumed, EventId};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -22,9 +22,12 @@ pub trait StreamPublisher<T>: Send + Sync {
 /// Defines how to consume Events from a stream.
 #[async_trait]
 pub trait StreamConsumer<T>: Send + Sync {
+    /// Loads a batch of raw records for consumption.
+    async fn load(&self, records: Vec<&[u8]>) -> Result<(), StreamError>;
+
     /// Consumes the next event from the stream, returning it in the Consumed state.
     async fn consume(&self) -> Result<Option<Event<T, Consumed>>, StreamError>;
-    
+
     /// Acknowledges that an event has been successfully processed.
     async fn ack(&self, event_id: &EventId) -> Result<(), StreamError>;
 }

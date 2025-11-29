@@ -1,7 +1,7 @@
+use crate::events::{Consumed, Event};
 use async_trait::async_trait;
-use crate::events::{Event, Consumed};
-use thiserror::Error;
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum ProcessingError {
@@ -23,5 +23,8 @@ pub enum ProcessingResult {
 #[async_trait]
 pub trait Processor<T>: Send + Sync {
     /// Processes a Consumed event and returns a result.
-    async fn process(&self, event: &Event<T, Consumed>) -> Result<ProcessingResult, ProcessingError>;
+    async fn process(
+        &self,
+        event: &Event<T, Consumed>,
+    ) -> Result<ProcessingResult, ProcessingError>;
 }
