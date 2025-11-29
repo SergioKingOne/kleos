@@ -13,32 +13,19 @@ Parameters:
     Default: dev
 
 Resources:
-  # API Gateway REST API
+  # API Gateway REST API (raw resource - no auto-deployment)
   KleosApi:
-    Type: AWS::Serverless::Api
+    Type: AWS::ApiGateway::RestApi
     Properties:
       Name: !Sub kleos-api-${Environment}
-      StageName: !Ref Environment
       Description: Kleos event ingestion API
-      Cors:
-        AllowMethods: "'POST, OPTIONS'"
-        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-        AllowOrigin: "'*'"  # TODO: Restrict in production
-        MaxAge: "'600'"
-      TracingEnabled: true
-      MethodSettings:
-        - ResourcePath: "/*"
-          HttpMethod: "*"
-          LoggingLevel: INFO
-          DataTraceEnabled: true
-          MetricsEnabled: true
-      AccessLogSetting:
-        DestinationArn: !GetAtt ApiAccessLogGroup.Arn
-        Format: '$context.requestId $context.extendedRequestId $context.identity.sourceIp $context.requestTime $context.httpMethod $context.routeKey $context.status $context.protocol $context.responseLength'
       Tags:
-        Environment: !Ref Environment
-        Project: Kleos
-        ManagedBy: SAM
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: Kleos
+        - Key: ManagedBy
+          Value: SAM
 
   # CloudWatch Log Group for API Gateway access logs
   ApiAccessLogGroup:
@@ -71,3 +58,9 @@ Outputs:
     Value: !Ref Environment
     Export:
       Name: !Sub ${AWS::StackName}-StageName
+
+  ApiAccessLogGroupArn:
+    Description: ARN of API access log group
+    Value: !GetAtt ApiAccessLogGroup.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-AccessLogGroupArn

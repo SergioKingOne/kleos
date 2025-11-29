@@ -41,7 +41,6 @@ Resources:
       CodeUri: ../../../crates/kleos-process-lambda/
       Handler: bootstrap
       Description: Processes user action events from Kinesis stream
-      ReservedConcurrentExecutions: 10
       Policies:
         - Statement:
             - Effect: Allow

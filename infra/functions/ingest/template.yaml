@@ -91,6 +91,23 @@ Resources:
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiId}/*/*/ingest
 
+  # API Gateway Deployment (after methods are created)
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - IngestMethod
+    Properties:
+      RestApiId: !Ref ApiId
+
+  # API Gateway Stage
+  ApiStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      RestApiId: !Ref ApiId
+      DeploymentId: !Ref ApiDeployment
+      StageName: !Ref Environment
+      TracingEnabled: true
+
 Outputs:
   IngestFunctionArn:
     Description: ARN of the ingest Lambda function
